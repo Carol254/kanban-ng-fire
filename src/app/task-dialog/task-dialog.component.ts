@@ -1,14 +1,16 @@
 import { Component, Inject } from '@angular/core';
 import { MatDialogRef,MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatInputModule } from '@angular/material/input';
-import {MatButtonModule} from '@angular/material/button';
+import {MatButtonModule, MatFabButton} from '@angular/material/button';
 import { FormsModule } from '@angular/forms';
 import { Task } from '../task/task';
+import { MatIconModule } from '@angular/material/icon';
+import { NgIf } from '@angular/common';
 
 @Component({
   selector: 'app-task-dialog',
   standalone: true,
-  imports: [MatInputModule,FormsModule,MatDialogModule,MatButtonModule],
+  imports: [MatInputModule,FormsModule,MatDialogModule,MatButtonModule,MatIconModule,MatFabButton,NgIf],
   templateUrl: './task-dialog.component.html',
   styleUrl: './task-dialog.component.css'
 })

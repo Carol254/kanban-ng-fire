@@ -1,52 +1,94 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
 import { Task } from './task/task';
 import { TaskComponent } from './task/task.component';
-import { NgFor,NgIf } from '@angular/common';
+import { AsyncPipe, NgFor,NgIf } from '@angular/common';
 import { MatCard } from '@angular/material/card';
 import { CdkDragDrop, DragDropModule, transferArrayItem } from '@angular/cdk/drag-drop';
 import { TaskDialogComponent } from './task-dialog/task-dialog.component';
-import {MatButtonModule} from '@angular/material/button';
+import { MatButtonModule} from '@angular/material/button';
+import { AngularFirestore, AngularFirestoreCollection } from '@angular/fire/compat/firestore';
+import { Observable } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
+
+const getObservable = (collection: AngularFirestoreCollection<Task>) => {
+  const subject = new BehaviorSubject<Task[]>([]);
+  collection.valueChanges({ idField: 'id' }).subscribe((val: Task[]) => {
+    subject.next(val);
+  });
+  return subject;
+};
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet,MatToolbarModule,MatIconModule,TaskComponent,NgFor,MatCard,DragDropModule,NgIf,TaskDialogComponent,MatButtonModule],
+  imports: [
+    RouterOutlet,
+    MatToolbarModule,
+    MatIconModule,
+    TaskComponent,
+    NgFor,
+    MatCard,
+    DragDropModule,
+    NgIf,
+    TaskDialogComponent,
+    MatButtonModule,
+    AsyncPipe
+  ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
-export class AppComponent {
+export class AppComponent  implements OnInit{
 
-  constructor(private dialog:MatDialog){}
+  constructor(private dialog:MatDialog , private store: AngularFirestore){ }
 
   title = 'kanban-fire';
 
-  todo: Task[] = [
-    {
-      title: 'Buy milk',
-      description: 'Go to the store and buy milk'
-    },
-    {
-      title: 'Create a Kanban app',
-      description: 'Using Firebase and Angular create a Kanban app!'
-    }
-  ];
-  // todo: Task[] = [...];
-  inProgress: Task[] = [];
-  done: Task[] = [];
+  todo = getObservable(this.store.collection('todo')) as Observable<Task[]>;
+  inProgress = getObservable(this.store.collection('inProgress')) as Observable<Task[]>;
+  done = getObservable(this.store.collection('done')) as Observable<Task[]>;
 
-  editTask(list: string, task: Task): void {}
 
-  drop(event: CdkDragDrop<Task[]>): void {
+  ngOnInit(): void {
+      
+  }
+
+
+  editTask(list: 'done' | 'todo' | 'inProgress', task: Task): void {
+    const dialogRef = this.dialog.open(TaskDialogComponent, {
+      width: '270px',
+      data: {
+        task,
+        enableDelete: true,
+      },
+    });
+    dialogRef.afterClosed().subscribe((result: TaskDialogResult|undefined) => {
+      if (!result) {
+        return;
+      }
+      if (result.delete) {
+        this.store.collection(list).doc(task.id).delete();
+      } else {
+        this.store.collection(list).doc(task.id).update(task);
+      }
+    });
+  }
+
+  drop(event: CdkDragDrop<Task[] | any>): void {
     if (event.previousContainer === event.container) {
       return;
     }
-    if (!event.container.data || !event.previousContainer.data) {
-      return;
-    }
+    const item = event.previousContainer.data[event.previousIndex];
+    this.store.firestore.runTransaction(() => {
+      const promise = Promise.all([
+        this.store.collection(event.previousContainer.id).doc(item.id).delete(),
+        this.store.collection(event.container.id).add(item),
+      ]);
+      return promise;
+    });
     transferArrayItem(
       event.previousContainer.data,
       event.container.data,
@@ -54,6 +96,8 @@ export class AppComponent {
       event.currentIndex
     );
   }
+
+  
 
   newTask(): void {
     const dialogRef = this.dialog.open(TaskDialogComponent, {
@@ -64,11 +108,11 @@ export class AppComponent {
     });
     dialogRef
       .afterClosed()
-      .subscribe((result: TaskDialogResult|undefined) => {
+      .subscribe((result: TaskDialogResult) => {
         if (!result) {
           return;
         }
-        this.todo.push(result.task);
+        this.store.collection('todo').add(result.task);
       });
   }
 }
